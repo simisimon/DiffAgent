@@ -1,0 +1,40 @@
+name: Validate Configuration Changes
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-config:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install agno requests
+
+    - name: Run DiffAgent
+      run: |
+        python agent.py > results.txt
+
+    - name: Upload results
+      uses: actions/upload-artifact@v3
+      with:
+        name: validation-results
+        path: results.txt
+
+    - name: Fail and report errors if detected
+      if: ${{ steps.run.outputs.errors != '' }}
+      run: |
+        echo "Errors detected in configuration files:" && cat results.txt
+        exit 1

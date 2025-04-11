@@ -1,0 +1,46 @@
+name: Validate Configuration Changes
+
+description: >
+  A reusable GitHub Action to validate commit diffs for configuration errors in configuration files.
+
+inputs:
+  diff_file:
+    description: The file containing the commit diff to validate.
+    required: true
+    default: diff.txt
+
+outputs:
+  errors:
+    description: The list of detected configuration errors.
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run DiffAgent
+      run: |
+        python agent.py > results.txt
+
+    - name: Output results
+      id: output-errors
+      run: |
+        if [ -s results.txt ]; then
+          echo "errors=$(cat results.txt)" >> $GITHUB_ENV
+        else
+          echo "errors=" >> $GITHUB_ENV
+        fi
+
+    - name: Fail if errors are detected
+      if: ${{ env.errors != '' }}
+      run: |
+        echo "Errors detected in configuration files:" && cat results.txt
+        exit 1
