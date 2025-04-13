@@ -1,77 +1,144 @@
-import agno
-import os
+from agno.workflow import Workflow, RunResponse
+from agno.agent import Agent
+from agno.models.openai.like import OpenAILike
+from agno.models.openai import OpenAIChat
+from agno.utils.log import logger
+from pydantic import BaseModel, Field
+from os import getenv
+from textwrap import dedent
 
-class DiffAgent:
-    def __init__(self):
-        self.llm = agno.LLM()
 
-    def validate_commit_diff(self, commit_diff):
+changed_options_report = "../reports/changed_options_report.json"
+additional_information_report = "../reports/additional_information_report.json"
+change_analysis_report = "../reports/change_analysis_report.json"
+response_report = "../reports/response_report.json"
+
+class ChangedOption(BaseModel):
+    """Represents a changed configuration option."""
+    file_path: str = Field(..., description="Path to the modified file.")
+    old_value: str = Field(..., description="Old value of the configuration option.")
+    new_value: str = Field(..., description="New value of the configuration option.")
+    option_name: str = Field(..., description="Name of the configuration option.")
+
+
+class CommitChanges(BaseModel):
+    """Represents the changes made in a commit."""
+    changed_options: list[ChangedOption]
+
+
+class ConfigError(BaseModel):
+    commit_hash: str = Field(..., description="Hash of the commit.")
+    has_error: bool = Field(..., description="Indicates if there is an error.")
+    err_option: str = Field(..., description="Erroneous configuration option.")
+    reason: str = Field(..., description="Explanation of the configuration error.")
+    fix: str = Field(..., description="Potential fix for resolving the configuration error.")
+
+
+class CommitDiffValidator(Workflow):
+    """Advanced workflow for validating commit diffs."""
+
+    description: str = dedent("""\
+    An extremly intelligent commit diff validator that analyzes file diffs of configuration 
+    files to detect potential misocnfiguration. engaging, well-researched content. This 
+    workflow orchestrates multiple AI agents to extract changed configuration options
+    from file diffs, crawl further information from the repository and the Web if necessary
+    , analyzes the files diffs together with additional information, and create a response containing
+    potential configuration errors. The system excels at validating commit diffs.
+    """
+    )
+
+    option_extractor: Agent = Agent(
+       model=OpenAIChat(
+            id="gpt-4o-mini",
+            api_key=getenv("OPENAI_API_KEY"),
+        ),
+        description=dedent("""\
+        You are OptionExtracter-X, an elite code reviewer specialized in analyzing file diffs
+        of configuration files and extracting changed configuration options.\
+        """),
+        introduction=dedent("""\
+        1. Option Extraction
+        - Identify the configuration files that have been modified
+        - Extract all configuration options that have been changed, inlcuding their old and new value
+        2. Structured Output
+        - Provide a structured output of the modified options
+        - Include the commit hash, file paths, and option names and values that have been changed.\
+        """),
+        response_model=CommitChanges
+    )
+    
+    change_analyzer: Agent = Agent(
+        model=OpenAIChat(
+            id="gpt-4o-mini",
+            api_key=getenv("OPENAI_API_KEY"),
+        ),
+        description=dedent("""\
+        You are ChangeAnalyzer-X, an elite code reviewer specialized in determining whether further
+        information is needed to reliably validate if the changed configuration options introduce 
+        potential configuration errors.\
+        """),
+        introduction=dedent("""\
+        1. Information Analysis
+        - Analyze the extracted configuration options and changed values
+        - Determine if further information is needed to validate the changes/
+        """),
+        expected_output=dedent("""
+        Answer with true if further information is needed, otherwise false. Also return what information is needed and what sources you would crawl. Available sources are: \
+        - The repository itself",
+        - The Web\
+        """),              
+    )
+
+    information_crawler: Agent = Agent(
+        model="",
+        tools=[]
+
+    )
+
+    constraint_checker: Agent = Agent(
+        model="",
+        tools=[]
+
+    )
+
+    dependency_checker: Agent = Agent(
+        model="",
+        tools=[]
+
+    )
+
+    response_generator: Agent = Agent(
+        model=""
+    )
+
+    def run(self, commit_diff: str) -> str:
         """
-        Validates the commit diff for configuration errors.
-        
-        Args:
-            commit_diff (str): The diff of the commit to validate.
-
-        Returns:
-            list: A list of potential configuration errors.
+        Run the workflow with the given commit diff.
         """
-        # Filter configuration file changes
-        config_diffs = self._filter_config_files(commit_diff)
-        
-        # Validate each configuration file diff
-        errors = []
-        for file_diff in config_diffs:
-            errors.extend(self._validate_config_file(file_diff))
-        
-        return errors
+        # Extract options from the commit diff
+        logger.info(f"Extracting options from commit diff")
+        option_repsonse: RunResponse = self.option_extractor.run(commit_diff)
 
-    def _filter_config_files(self, commit_diff):
-        """
-        Filters the commit diff to include only configuration file changes.
-
-        Args:
-            commit_diff (str): The diff of the commit.
-
-        Returns:
-            list: A list of diffs for configuration files.
-        """
-        # Placeholder logic to filter configuration files
-        config_files = []
-        for line in commit_diff.splitlines():
-            if line.endswith(('.yaml', '.yml', '.json', '.ini', '.cfg')):
-                config_files.append(line)
-        return config_files
-
-    def _validate_config_file(self, file_diff):
-        """
-        Validates a single configuration file diff for errors.
-
-        Args:
-            file_diff (str): The diff of the configuration file.
-
-        Returns:
-            list: A list of potential errors in the configuration file.
-        """
-        # Use the LLM to analyze the file diff
-        response = self.llm.analyze(file_diff)
-        return response.get('errors', [])
-
-# Example usage
-if __name__ == "__main__":
-    agent = DiffAgent()
-
-    # Get the diff from the GitHub environment
-    diff_file = os.getenv('GITHUB_EVENT_PATH', 'diff.txt')
-    with open(diff_file, 'r') as f:
-        commit_diff = f.read()
-
-    # Validate the diff
-    errors = agent.validate_commit_diff(commit_diff)
-
-    # Output the results
-    with open('results.txt', 'w') as result_file:
-        if errors:
-            result_file.write("Potential configuration errors:\n")
-            result_file.write("\n".join(errors))
+        # Check if the response is valid
+        if isinstance(option_repsonse.content, CommitChanges):
+            logger.info(f"Found changed options")
+            # Cache the search results
+            print("Extracted Options:", type(option_repsonse.content), option_repsonse.content)
+            changed_options = option_repsonse.content
         else:
-            result_file.write("No configuration errors found.")
+            changed_options = None
+
+        if changed_options:
+            decision_response: RunResponse = self.change_analyzer.run(changed_options)
+            print(decision_response.content)
+
+        # Crawl information based on the extracted options
+        #information = self.information_crawler.run(options)
+
+        # Analyze changes based on the information
+        #analysis = self.change_analyzer.run(information)
+
+        # Summarize the analysis
+        #response = self.response_generator.run(analysis)
+
+        #return response
