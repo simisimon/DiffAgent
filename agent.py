@@ -126,14 +126,31 @@ class CommitDiffValidator(Workflow):
         - Extract relevant information from the crawled websites
         2. Information Extraction
         - Summarize the crawled information and provide it in a structured format
-        - Include the URLs of the crawled websites and the extracted information
+        - Include the URLs of the crawled websites and the extracted information\
+        """)
 
     )
 
     misconfiguration_checker: Agent = Agent(
-        model="",
-        tools=[]
-
+        model=OpenAIChat(
+            id="gpt-4o-mini",
+            api_key=getenv("OPENAI_API_KEY"),
+        ),
+        description=dedent("""\
+        You are MisconfigurationChecker-X, an elite agent specialized in analyzing configuration
+        changes and identifying potential misconfigurations due to violated constraints or dependencies.\
+        """),
+        instructions=dedent("""\
+        1. Configuration Change Analysis
+        - Analyze the configuration changes and the additional information if available
+        - Check the changes against known constraints and dependencies 
+        - Identify potential misconfigurations due to violated constraints or dependencies
+        2. Structured Output
+        - Provide a structured output of the identified misconfigurations
+        - Include the commit hash, file paths, and exact option names and values that have been changed
+        - Provide an explanation of the misconfiguration and potential fixes\
+        """),
+        response_model=ConfigError
     )
 
 

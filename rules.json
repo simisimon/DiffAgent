@@ -1,59 +1,55 @@
 {
-    "Range": {
-      "BasicNumeric": {
-        "constraint": "Value must be within data-type-defined range",
-        "violation": "Value exceeds upper/lower bounds",
-        "example": "Integer.MAX_VALUE + 1"
-      },
-      "Bool": {
-        "allowed_values": ["true", "false"],
-        "violation": "Any value not in allowed set",
-        "example": "\"maybe\""
-      },
-      "Enum": {
-        "allowed_values": ["enum1", "enum2"],
-        "violation": "Use of a value outside the enumerated set",
-        "example": "\"invalid_enum\""
-      },
-      "IPAddress": {
-        "constraint": "Each octet must be in [0, 255]",
-        "violation": "Octet outside valid range",
-        "example": "256.123.45.6"
-      },
-      "Port": {
-        "constraint": "Port number must be in [0, 65535]",
-        "violation": "Value outside allowed range",
-        "example": 70000
-      },
-      "Permission": {
-        "constraint": "Permission bits must be in [000, 777]",
-        "violation": "Value not in octal or exceeds 777",
-        "example": "999"
-      }
+  "Syntax": {
+    "Path": {
+      "Rule": "^(\\/[^\\/ ]*)+\\/?$"
     },
-    "Dependency": {
-      "Control": {
-        "constraint_format": "(P1, V1, ◇) => P2",
-        "relation_operators": [">", ">=", "=", "!=", "<", "<="],
-        "violation": "Use of ¬◇ (negated condition)",
-        "example": "(debug=true) => (log_level >= 2) violated by log_level=1"
-      },
-      "ValueRelationship": {
-        "constraint_format": "(P1, P2, ◇)",
-        "relation_operators": [">", ">=", "=", "!=", "<", "<="],
-        "violation": "Inconsistent values violating expected relationship",
-        "example": "(memory_limit, heap_size, >=) violated by heap_size > memory_limit"
-      }
+    "URL": {
+      "Rule": "[a-z]+://.*"
+    },
+    "IP Address": {
+      "Rule": "[\\d]{1,3}(\\.[\\d]{1,3}){3}"
+    },
+    "Port": {
+      "Rule": "([1-9][0-9]{0,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])"
+    },
+    "Size": {
+      "Rule": "(\\d)+ ?(B|KB|MB|GB|TB|PB)"
+    },
+    "Time": {
+      "Rule": "(\\d)+ ?(ms|s|min|h|d|w)"
     },
     "Version": {
-      "ParameterChange": {
-        "constraint": "Configuration parameters change across versions",
-        "violation": "Use of removed or added parameter",
-        "example": {
-          "removed": "parameter used in V2 that was removed in V1",
-          "added": "parameter introduced in V2 used with V1"
-        }
-      }
+      "Rule": "(\\d)+\\.(\\d)+\\.(\\d)+"
+    },
+    "Speed": {
+      "Rule": "(\\d)+ ?(bps|Mbps|Kbps)"
+    }
+
+  },
+  "Range": {
+    "Number": {
+      "Rule": "Valid Range constrained by data type"
+    },
+    "Bool": {
+      "Rule": "Value set = {true, false}"
+    },
+    "IP Address": {
+      "Rule": "Range for each octet = [0, 255]"
+    },
+    "Port": {
+      "Rule": "Range = [0, 65535]"
+  },
+  "Dependency": {
+    "Control": {
+      "Rule": "(P1, V, \u25c7) \u21a6 P2, \u25c7 \u2208 {>, \u2265, =, \u2260, <, \u2264}"
+    },
+    "Value Relationship": {
+      "Rule": "(P1, P2, \u25c7), \u25c7 \u2208 {>, \u2265, =, \u2260, <, \u2264}"
+    }
+  },
+  "Version": {
+    "Parameter change": {
+      "Rule": "(V1, PSet1) \u21a6 (V2, PSet2), PSet1 \u2260 PSet2"
     }
   }
-  
+}
