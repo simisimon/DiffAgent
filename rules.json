@@ -1,0 +1,59 @@
+{
+    "Range": {
+      "BasicNumeric": {
+        "constraint": "Value must be within data-type-defined range",
+        "violation": "Value exceeds upper/lower bounds",
+        "example": "Integer.MAX_VALUE + 1"
+      },
+      "Bool": {
+        "allowed_values": ["true", "false"],
+        "violation": "Any value not in allowed set",
+        "example": "\"maybe\""
+      },
+      "Enum": {
+        "allowed_values": ["enum1", "enum2"],
+        "violation": "Use of a value outside the enumerated set",
+        "example": "\"invalid_enum\""
+      },
+      "IPAddress": {
+        "constraint": "Each octet must be in [0, 255]",
+        "violation": "Octet outside valid range",
+        "example": "256.123.45.6"
+      },
+      "Port": {
+        "constraint": "Port number must be in [0, 65535]",
+        "violation": "Value outside allowed range",
+        "example": 70000
+      },
+      "Permission": {
+        "constraint": "Permission bits must be in [000, 777]",
+        "violation": "Value not in octal or exceeds 777",
+        "example": "999"
+      }
+    },
+    "Dependency": {
+      "Control": {
+        "constraint_format": "(P1, V1, ◇) => P2",
+        "relation_operators": [">", ">=", "=", "!=", "<", "<="],
+        "violation": "Use of ¬◇ (negated condition)",
+        "example": "(debug=true) => (log_level >= 2) violated by log_level=1"
+      },
+      "ValueRelationship": {
+        "constraint_format": "(P1, P2, ◇)",
+        "relation_operators": [">", ">=", "=", "!=", "<", "<="],
+        "violation": "Inconsistent values violating expected relationship",
+        "example": "(memory_limit, heap_size, >=) violated by heap_size > memory_limit"
+      }
+    },
+    "Version": {
+      "ParameterChange": {
+        "constraint": "Configuration parameters change across versions",
+        "violation": "Use of removed or added parameter",
+        "example": {
+          "removed": "parameter used in V2 that was removed in V1",
+          "added": "parameter introduced in V2 used with V1"
+        }
+      }
+    }
+  }
+  
