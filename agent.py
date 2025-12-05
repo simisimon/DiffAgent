@@ -1,201 +1,197 @@
-from agno.workflow import Workflow, RunResponse
-from agno.agent import Agent
-from agno.models.openai.like import OpenAILike
-from agno.tools.duckduckgo import DuckDuckGoTools
-from agno.models.ollama import Ollama
-from agno.models.openai import OpenAIChat
-from agno.utils.log import logger
-from pydantic import BaseModel, Field
-from os import getenv
-from textwrap import dedent
-from web_search import get_information_from_web
+"""DiffAgent using LangGraph for configuration validation."""
+
+from langgraph.graph import StateGraph, END
+from state import DiffAgentState
+from nodes import (
+    extract_options_node,
+    extract_dependencies_node,
+    analyze_changes_node,
+    detect_errors_node,
+    should_continue
+)
+from models import ValidationResult
+import os
+from dotenv import load_dotenv
 
 
-changed_options_report = "../reports/changed_options_report.json"
-additional_information_report = "../reports/additional_information_report.json"
-change_analysis_report = "../reports/change_analysis_report.json"
-response_report = "../reports/response_report.json"
-
-class ChangedOption(BaseModel):
-    """Represents a changed configuration option."""
-    file_path: str = Field(..., description="Path to the modified file.")
-    old_value: str = Field(..., description="Old value of the configuration option.")
-    new_value: str = Field(..., description="New value of the configuration option.")
-    option_name: str = Field(..., description="The exact name of the configuration option.")
-
-
-class CommitChanges(BaseModel):
-    """Represents the changes made in a commit."""
-    changed_options: list[ChangedOption]
-
-
-class ConfigError(BaseModel):
-    commit_hash: str = Field(..., description="Hash of the commit.")
-    has_error: bool = Field(..., description="Indicates if there is an error.")
-    err_option: ChangedOption = Field(..., description="Erroneous configuration option.")
-    reason: str = Field(..., description="Explanation of the configuration error.")
-    fix: str = Field(..., description="Potential fix for resolving the configuration error.")
-
-class CommitChanges(BaseModel):
-    """Represents the changes made in a commit."""
-    errors: list[ConfigError]
-
-
-class CommitDiffValidator(Workflow):
-    """Advanced workflow for validating commit diffs."""
-
-    description: str = dedent("""\
-    An extremly intelligent commit diff validator that analyzes file diffs of configuration 
-    files to detect potential misocnfiguration. engaging, well-researched content. This 
-    workflow orchestrates multiple AI agents to extract changed configuration options
-    from file diffs, crawl further information from the repository and the Web if necessary
-    , analyzes the files diffs together with additional information, and create a response containing
-    potential configuration errors. The system excels at validating commit diffs.
+class DiffAgent:
     """
-    )
+    DiffAgent validates configuration file changes using LangGraph.
 
-    option_extractor: Agent = Agent(
-        #model=OpenAIChat(
-        #    id="gpt-4o-mini",
-        #    api_key=getenv("OPENAI_API_KEY"),
-        #),
-        model=Ollama(id="llama3.1:8b"),
-        description=dedent("""\
-        You are OptionExtracter-X, an elite code reviewer specialized in analyzing file diffs
-        of configuration files and extracting changed configuration options.\
-        """),
-        instructions=dedent("""\
-        1. Option Extraction
-        - Identify the configuration files that have been modified
-        - Extract all configuration options that have been changed, inlcuding their old and new value
-        2. Structured Output
-        - Provide a structured output of the modified options
-        - Include the commit hash, file paths, and exact option names and values that have been changed.\
-        """),
-        response_model=CommitChanges
-    )
+    The agent uses a multi-step workflow:
+    1. Extract configuration options from git diff
+    2. Analyze changes to determine if additional context is needed
+    3. Detect configuration errors and inconsistencies
+    4. Generate a detailed validation report
+    """
 
-    change_analyzer: Agent = Agent(
-        model=OpenAIChat(
-            id="gpt-4o-mini",
-            api_key=getenv("OPENAI_API_KEY"),
-        ),
-        description=dedent("""\
-        You are ChangeAnalyzer-X, an elite code reviewer specialized in determining whether further
-        information is needed to reliably validate if the changed configuration options introduce 
-        potential configuration errors.\
-        """),
-        instructions=dedent("""\
-        1. Information Analysis
-        - Analyze the extracted configuration options and changed values
-        - Determine if further information is needed to validate the changes\
-        """),
-        expected_output="Answer solely with true if further information is needed, otherwise false."              
-    )
+    def __init__(self):
+        """Initialize the DiffAgent with a LangGraph workflow."""
+        load_dotenv()
 
-    query_builder: Agent = Agent(
-        model=OpenAIChat(
-            id="gpt-4o-mini",
-            api_key=getenv("OPENAI_API_KEY"),
-        ),
-        description=dedent("""\
-        You are QueryBuilder-X, an elite agent specialized in building search queries
-        for crawling additional information of configuration options in the Web.\
-        """),
-        instructions=dedent("""\
-        1. Query Construction
-        - Construct a search query based on the given configuration option
-        - Ensure the query is relevant to the given configuration option\
-        """),
-        expected_output="Return a single search query string that is relevant to the changed configuration options."
-    )
+        # Verify API key is available
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError("OPENAI_API_KEY not found in environment variables")
 
-    web_crawler: Agent = Agent(
-        model=OpenAIChat(
-            id="gpt-4o-mini",
-            api_key=getenv("OPENAI_API_KEY"),
-        ),
-        tools=[get_information_from_web],
-        description=dedent("""\
-        You are WebCrawler-X, an elite agent specialized in crawling the Web for additional information
-        about configuration options.\
-        """),
-        instructions=dedent("""\
-        1. Web Crawling
-        - Use the search query to crawl the Web for additional information
-        - Extract relevant information from the crawled websites
-        2. Information Extraction
-        - Summarize the crawled information and provide it in a structured format
-        - Include the URLs of the crawled websites and the extracted information\
-        """)
+        # Build the graph
+        self.workflow = self._build_graph()
 
-    )
-
-    misconfiguration_checker: Agent = Agent(
-        model=OpenAIChat(
-            id="gpt-4o-mini",
-            api_key=getenv("OPENAI_API_KEY"),
-        ),
-        description=dedent("""\
-        You are MisconfigurationChecker-X, an elite agent specialized in analyzing configuration
-        changes and identifying potential misconfigurations due to violated constraints or dependencies.\
-        """),
-        instructions=dedent("""\
-        1. Configuration Change Analysis
-        - Analyze the configuration changes and the additional information if available
-        - Check the changes against known constraints and dependencies 
-        - Identify potential misconfigurations due to violated constraints or dependencies
-        2. Structured Output
-        - Provide a structured output of the identified misconfigurations
-        - Include the commit hash, file paths, and exact option names and values that have been changed
-        - Provide an explanation of the misconfiguration and potential fixes\
-        """),
-        response_model=ConfigError
-    )
-
-
-    response_generator: Agent = Agent(
-        model=""
-    )
-
-    def run(self, commit_diff: str) -> str:
+    def _build_graph(self) -> StateGraph:
         """
-        Run the workflow with the given commit diff.
-        """
-        # Extract options from the commit diff
-        logger.info(f"Extracting options from commit diff")
-        option_repsonse: RunResponse = self.option_extractor.run(commit_diff)
+        Build the LangGraph workflow.
 
-        # Check if the response is valid
-        if isinstance(option_repsonse.content, CommitChanges):
-            logger.info(f"Found changed options")
-            # Cache the search results
-            print("Extracted Options:", type(option_repsonse.content), option_repsonse.content)
-            changed_options = option_repsonse.content
+        The workflow follows this structure:
+        START -> extract_options -> extract_dependencies -> analyze_changes -> detect_errors -> END
+        """
+        # Create a new graph
+        graph = StateGraph(DiffAgentState)
+
+        # Add nodes
+        graph.add_node("extract_options", extract_options_node)
+        graph.add_node("extract_dependencies", extract_dependencies_node)
+        graph.add_node("analyze_changes", analyze_changes_node)
+        graph.add_node("detect_errors", detect_errors_node)
+
+        # Add edges
+        graph.set_entry_point("extract_options")
+        graph.add_edge("extract_options", "extract_dependencies")
+        graph.add_edge("extract_dependencies", "analyze_changes")
+
+        # Conditional edge from analyze_changes
+        graph.add_conditional_edges(
+            "analyze_changes",
+            should_continue,
+            {
+                "detect_errors": "detect_errors",
+                "end": END
+            }
+        )
+
+        # Final edge
+        graph.add_edge("detect_errors", END)
+
+        # Compile the graph
+        return graph.compile()
+
+    def validate_diff(self, commit_diff: str, commit_hash: str = None, project_root: str = ".") -> ValidationResult:
+        """
+        Validate a commit diff for configuration errors.
+
+        Args:
+            commit_diff: The git diff content to analyze
+            commit_hash: Optional commit hash for tracking
+            project_root: Root directory of the project for CfgNet analysis
+
+        Returns:
+            ValidationResult with detected errors and summary
+        """
+        # Initialize state
+        initial_state: DiffAgentState = {
+            "commit_diff": commit_diff,
+            "commit_hash": commit_hash,
+            "project_root": project_root,
+            "changed_options": [],
+            "config_dependencies": [],
+            "needs_additional_info": False,
+            "additional_info": None,
+            "detected_errors": [],
+            "validation_complete": False,
+            "error_summary": None
+        }
+
+        # Run the workflow
+        final_state = self.workflow.invoke(initial_state)
+
+        # Build the result
+        has_errors = len(final_state["detected_errors"]) > 0
+        errors = final_state["detected_errors"]
+        summary = final_state.get("error_summary", "Validation completed.")
+
+        return ValidationResult(
+            has_errors=has_errors,
+            errors=errors,
+            summary=summary
+        )
+
+    def validate_from_file(self, diff_file_path: str, commit_hash: str = None, project_root: str = ".") -> ValidationResult:
+        """
+        Validate a diff from a file.
+
+        Args:
+            diff_file_path: Path to the file containing the diff
+            commit_hash: Optional commit hash for tracking
+            project_root: Root directory of the project for CfgNet analysis
+
+        Returns:
+            ValidationResult with detected errors and summary
+        """
+        with open(diff_file_path, 'r') as f:
+            commit_diff = f.read()
+
+        return self.validate_diff(commit_diff, commit_hash, project_root)
+
+    def print_result(self, result: ValidationResult) -> None:
+        """
+        Print the validation result in a human-readable format.
+
+        Args:
+            result: The ValidationResult to print
+        """
+        print("=" * 80)
+        print("CONFIGURATION VALIDATION REPORT")
+        print("=" * 80)
+        print()
+        print(f"Summary: {result.summary}")
+        print()
+
+        if result.has_errors:
+            print(f"Found {len(result.errors)} issue(s):")
+            print()
+
+            for i, error in enumerate(result.errors, 1):
+                print(f"{i}. [{error.severity.upper()}] {error.file_path}")
+                print(f"   Option: {error.option_name}")
+                if error.old_value:
+                    print(f"   Old Value: {error.old_value}")
+                if error.new_value:
+                    print(f"   New Value: {error.new_value}")
+                print(f"   Issue: {error.reason}")
+                print(f"   Suggested Fix: {error.suggested_fix}")
+                print()
         else:
-            changed_options = None
+            print("✓ No configuration errors detected.")
+            print()
 
-        if changed_options:
-            search_queries = []
-            logger.info(f"Asses if further information is needed")
-            decision_response: RunResponse = self.change_analyzer.run(changed_options)
-            print("Decision Response: ", decision_response.content)
-            #if decision_response.content == "true":
-            for changed_option in changed_options.changed_options:
-                logger.info(f"Build search query for: {changed_option.option_name}")
-                input = f"Build a search query for the following configuration option: {changed_option.option_name} with old value {changed_option.old_value} and new value {changed_option.new_value}"
+        print("=" * 80)
 
-                query_builder_response: RunResponse = self.query_builder.run(input)
-                search_queries.append(query_builder_response.content)
-                print("Query:", query_builder_response.content)
-        
-                # Crawl information based on the extracted options
-                #information = self.information_crawler.run(options)
 
-        # Analyze changes based on the information
-        #analysis = self.change_analyzer.run(information)
+def main():
+    """Main entry point for command-line usage."""
+    import sys
 
-        # Summarize the analysis
-        #response = self.response_generator.run(analysis)
+    # Create the agent
+    agent = DiffAgent()
 
-        #return response
+    # Check if a diff file was provided
+    if len(sys.argv) > 1:
+        diff_file = sys.argv[1]
+        result = agent.validate_from_file(diff_file)
+    else:
+        # Read from stdin
+        print("Reading diff from stdin... (Press Ctrl+D when done)")
+        commit_diff = sys.stdin.read()
+        result = agent.validate_diff(commit_diff)
+
+    # Print the result
+    agent.print_result(result)
+
+    # Exit with error code if issues found
+    if result.has_errors:
+        # Check if any critical errors exist
+        critical_errors = [e for e in result.errors if e.severity == "critical"]
+        if critical_errors:
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
