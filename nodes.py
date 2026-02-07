@@ -45,6 +45,7 @@ Your task is to:
 2. Extract each configuration option that has been changed
 3. For each change, identify:
    - The file path
+   - The technology to which the configuration file belongs (e.g., Docker, Spring, Kubernetes, etc.)
    - The configuration option name
    - The old value
    - The new value
@@ -98,6 +99,28 @@ If no configuration changes are found, return an empty list."""
         "needs_additional_info": False,
         "validation_complete": False
     }
+
+
+def crawl_repository_node(state: DiffAgentState) -> dict[str, Any]:
+    """
+    Crawl the repository to gather additional context.
+
+    This node scans the repository for related configuration files,
+    documentation, and other relevant information that may aid in
+    validating the configuration changes.
+    """
+    pass 
+
+
+def crawl_documentation_node(state: DiffAgentState) -> dict[str, Any]:
+    """
+    Crawl documentation sources to gather additional context.
+
+    This node searches through technology documentation to find information 
+    relevant to the changed configuration options.
+    """
+    pass
+
 
 
 def extract_dependencies_node(state: DiffAgentState) -> dict[str, Any]:
@@ -188,7 +211,7 @@ def analyze_changes_node(state: DiffAgentState) -> dict[str, Any]:
     system_prompt = """You are ChangeAnalyzer-X, an expert at determining whether configuration
 changes require additional context for validation.
 
-Analyze the configuration changes and determine if you have enough information to validate them,
+Analyze the configuration changes and determine if you have enough information to validate them accurately,
 or if you need additional context such as:
 - Related configuration files in the repository
 - Documentation about the configuration options

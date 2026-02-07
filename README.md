@@ -1,6 +1,6 @@
-# DiffAgent -- Work In Progress
+# DiffAgent
 
-An AI-powered tool that validates configuration file changes to prevent misconfigurations before they reach production.
+An AI-powered CLI tool that validates configuration file changes to prevent misconfigurations before they reach production. Integrates seamlessly with Git pre-commit hooks.
 
 ## Overview
 
@@ -14,73 +14,204 @@ DiffAgent uses LangGraph and OpenAI's GPT models to analyze git diffs and automa
 
 ## Features
 
-- 🤖 **Multi-agent workflow** powered by LangGraph for intelligent analysis
-- 🔍 **Deep validation** of configuration files (Dockerfiles, .properties, .yaml, .json, .env, .ini)
-- 🛡️ **Security-aware** detection of risky configuration patterns
-- 📊 **Detailed reports** with severity levels and suggested fixes
-- ⚡ **Fast feedback** integrated into your PR workflow
-- 🎯 **Actionable suggestions** for fixing detected issues
+- **CLI Tool** - Easy-to-use command-line interface for validating configuration changes
+- **Pre-commit Hook Integration** - Automatically validate changes before every commit
+- **Multi-agent Workflow** - Powered by LangGraph for intelligent analysis
+- **Deep Validation** - Supports Dockerfiles, .properties, .yaml, .json, .env, .ini, .toml, and more
+- **Security-aware** - Detects risky configuration patterns
+- **Detailed Reports** - Clear severity levels and actionable fix suggestions
 
-## Quick Start
+## Installation
 
-### Local Usage
+### Prerequisites
 
-1. **Install dependencies:**
+- Python 3.11+
+- Git
+- OpenAI API key
+
+### Setup
+
 ```bash
+# Clone the repository
+git clone https://github.com/your-org/DiffAgent.git
+cd DiffAgent
+
+# Create virtual environment
 python -m venv env
-source env/bin/activate  # or `env\Scripts\activate` on Windows
-pip install -r requirements.txt
-```
+source env/bin/activate  # Linux/Mac
+# OR
+env\Scripts\activate  # Windows
 
-2. **Set up your OpenAI API key:**
-```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up your OpenAI API key
 echo "OPENAI_API_KEY=your-key-here" > .env
 ```
 
-3. **Run validation:**
+## CLI Usage
+
+### Basic Commands
+
 ```bash
+# Validate staged changes (for pre-commit hook)
+python agent.py --staged
+
+# Validate all uncommitted changes (staged + unstaged)
+python agent.py --all
+
 # Validate a diff file
 python agent.py path/to/diff.txt
 
-# Or pipe a git diff directly
+# Pipe a git diff directly
 git diff main | python agent.py
 
-# Run test suite
-python test_agent.py
+# Validate with strict mode (fail on any error, not just critical)
+python agent.py --staged --strict
+
+# Quiet mode (suppress non-essential output)
+python agent.py --staged --quiet
 ```
 
-### GitHub Action Usage
+### Command-Line Options
 
-Add DiffAgent to your repository's pull request workflow:
+| Option | Description |
+|--------|-------------|
+| `diff_file` | Path to a diff file to validate |
+| `--staged` | Validate only staged changes (for pre-commit hooks) |
+| `--all` | Validate all uncommitted changes (staged + unstaged) |
+| `--strict` | Fail on any error, not just critical ones |
+| `--quiet`, `-q` | Suppress non-essential output |
+| `--no-color` | Disable colored output |
+| `--project-root DIR` | Root directory for dependency analysis (default: `.`) |
+| `--version` | Show version information |
+| `--help`, `-h` | Show help message |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success - no errors or only warnings/info |
+| `1` | Validation failed - critical errors detected (or any errors with `--strict`) |
+| `2` | Runtime error - missing API key, file not found, etc. |
+
+## Pre-commit Hook Integration
+
+DiffAgent can be integrated into your Git workflow to automatically validate configuration changes before each commit.
+
+### Option 1: Manual Hook Setup
+
+Create a pre-commit hook script in your repository:
+
+```bash
+# Create the hook file
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+
+# DiffAgent Pre-commit Hook
+# Validates configuration file changes before committing
+
+# Path to DiffAgent (adjust if needed)
+DIFFAGENT_DIR="/path/to/DiffAgent"
+
+# Activate virtual environment if it exists
+if [ -f "$DIFFAGENT_DIR/env/bin/activate" ]; then
+    source "$DIFFAGENT_DIR/env/bin/activate"
+elif [ -f "$DIFFAGENT_DIR/env/Scripts/activate" ]; then
+    source "$DIFFAGENT_DIR/env/Scripts/activate"
+fi
+
+# Run DiffAgent on staged changes
+python "$DIFFAGENT_DIR/agent.py" --staged --strict
+
+# Capture exit code
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "Commit blocked: Configuration validation failed."
+    echo "Fix the issues above or use 'git commit --no-verify' to bypass."
+    exit 1
+fi
+
+exit 0
+EOF
+
+# Make the hook executable (Linux/Mac)
+chmod +x .git/hooks/pre-commit
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Create the hook file
+@"
+#!/bin/bash
+
+DIFFAGENT_DIR="/path/to/DiffAgent"
+
+if [ -f "`$DIFFAGENT_DIR/env/Scripts/activate" ]; then
+    source "`$DIFFAGENT_DIR/env/Scripts/activate"
+fi
+
+python "`$DIFFAGENT_DIR/agent.py" --staged --strict
+
+EXIT_CODE=`$?
+
+if [ `$EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "Commit blocked: Configuration validation failed."
+    echo "Fix the issues above or use 'git commit --no-verify' to bypass."
+    exit 1
+fi
+
+exit 0
+"@ | Out-File -FilePath .git\hooks\pre-commit -Encoding utf8
+```
+
+### Option 2: Using pre-commit Framework
+
+If you use the [pre-commit](https://pre-commit.com/) framework, add this to your `.pre-commit-config.yaml`:
 
 ```yaml
-name: Validate Configuration
-
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Run DiffAgent
-        run: python agent.py
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+repos:
+  - repo: local
+    hooks:
+      - id: diffagent
+        name: DiffAgent Configuration Validator
+        entry: python /path/to/DiffAgent/agent.py --staged --strict
+        language: system
+        pass_filenames: false
+        stages: [commit]
 ```
 
-**Important:** Add your OpenAI API key to repository secrets as `OPENAI_API_KEY`.
+Then install the hooks:
+
+```bash
+pre-commit install
+```
+
+### Option 3: Simple Inline Hook
+
+For a quick setup in the same repository:
+
+```bash
+# Create a simple pre-commit hook
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+python agent.py --staged
+EOF
+
+chmod +x .git/hooks/pre-commit
+```
+
+### Bypassing the Hook
+
+If you need to commit despite validation errors (use with caution):
+
+```bash
+git commit --no-verify -m "Your commit message"
+```
 
 ## Example Output
 
@@ -105,28 +236,79 @@ Found 1 issue(s):
 ================================================================================
 ```
 
+## Supported Configuration Files
+
+DiffAgent automatically detects and validates these configuration file types:
+
+- `Dockerfile` - Docker container configuration
+- `docker-compose.yml` / `docker-compose.yaml` - Docker Compose files
+- `*.properties` - Java properties files
+- `*.yaml` / `*.yml` - YAML configuration files
+- `*.json` - JSON configuration files
+- `*.env` - Environment variable files
+- `*.ini` / `*.conf` - INI-style configuration files
+- `*.toml` - TOML configuration files
+- `*.cfg` / `*.config` - Generic configuration files
+
+## GitHub Actions Integration
+
+DiffAgent can also run as a GitHub Action for PR validation:
+
+```yaml
+name: Validate Configuration
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Get PR diff
+        run: git diff origin/main...HEAD > diff.txt
+
+      - name: Run DiffAgent
+        run: python agent.py diff.txt
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
 ## Architecture
 
-DiffAgent uses a **LangGraph StateGraph** with three main nodes:
+DiffAgent uses a **LangGraph StateGraph** with the following nodes:
 
 1. **Extract Options** - Parses git diffs to identify configuration changes
-2. **Analyze Changes** - Determines if additional context is needed
-3. **Detect Errors** - Performs deep validation and identifies issues
-
-Each node uses GPT models with specialized prompts to ensure accurate detection.
-
-## Configuration Files Supported
-
-- Dockerfiles
-- .properties files
-- .yaml / .yml files
-- .json files
-- .env files
-- .ini / .conf files
+2. **Extract Dependencies** - Uses CfgNet to find configuration dependencies
+3. **Analyze Changes** - Determines if additional context is needed
+4. **Detect Errors** - Performs deep validation and identifies issues
 
 ## Development
 
 See [CLAUDE.md](CLAUDE.md) for detailed development documentation.
+
+### Running Tests
+
+```bash
+python test_agent.py
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | OpenAI API key for GPT model access |
 
 ## License
 

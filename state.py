@@ -11,6 +11,7 @@ class DiffAgentState(TypedDict):
     # Input
     commit_diff: str
     commit_hash: Optional[str]
+    project_root: Optional[str]
 
     # Extracted information
     changed_options: Annotated[list[ChangedOption], add]
