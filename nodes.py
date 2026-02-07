@@ -1,10 +1,12 @@
 """Nodes for the DiffAgent LangGraph workflow."""
 
 import re
-from typing import Any
+from typing import Any, Union
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.language_models.chat_models import BaseChatModel
 from state import DiffAgentState
 from models import ChangedOption, ConfigError, ConfigDependency
 from cfgnet.network.network import Network
@@ -17,13 +19,29 @@ import shutil
 import traceback
 
 
-def get_llm(model: str = "gpt-4o-mini") -> ChatOpenAI:
-    """Get an OpenAI LLM instance."""
-    return ChatOpenAI(
-        model=model,
-        temperature=0,
-        openai_api_key=os.getenv("OPENAI_API_KEY")
-    )
+def get_llm(provider: str = "openai", model: str = "gpt-4o-mini") -> BaseChatModel:
+    """
+    Get an LLM instance based on the provider and model.
+
+    Args:
+        provider: The LLM provider ('openai' or 'anthropic')
+        model: The model name to use
+
+    Returns:
+        A LangChain chat model instance
+    """
+    if provider == "anthropic":
+        return ChatAnthropic(
+            model=model,
+            temperature=0,
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
+    else:  # Default to OpenAI
+        return ChatOpenAI(
+            model=model,
+            temperature=0,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
 
 
 def extract_options_node(state: DiffAgentState) -> dict[str, Any]:
@@ -34,8 +52,10 @@ def extract_options_node(state: DiffAgentState) -> dict[str, Any]:
     changes including file paths, option names, and old/new values.
     """
     commit_diff = state["commit_diff"]
+    provider = state.get("llm_provider", "openai")
+    model = state.get("llm_model", "gpt-4o-mini")
 
-    llm = get_llm()
+    llm = get_llm(provider=provider, model=model)
 
     system_prompt = """You are OptionExtractor-X, an elite code reviewer specialized in analyzing
 file diffs of configuration files and extracting changed configuration options.
@@ -193,6 +213,8 @@ def analyze_changes_node(state: DiffAgentState) -> dict[str, Any]:
     or if additional information from the repository or documentation is needed.
     """
     changed_options = state["changed_options"]
+    provider = state.get("llm_provider", "openai")
+    model = state.get("llm_model", "gpt-4o-mini")
 
     if not changed_options:
         return {
@@ -200,7 +222,7 @@ def analyze_changes_node(state: DiffAgentState) -> dict[str, Any]:
             "additional_info": None
         }
 
-    llm = get_llm()
+    llm = get_llm(provider=provider, model=model)
 
     # Format the changed options for analysis
     options_summary = "\n".join([
@@ -261,6 +283,8 @@ def detect_errors_node(state: DiffAgentState) -> dict[str, Any]:
     changed_options = state["changed_options"]
     additional_info = state.get("additional_info", "")
     config_dependencies = state.get("config_dependencies", [])
+    provider = state.get("llm_provider", "openai")
+    powerful_model = state.get("llm_powerful_model", "gpt-4o")
 
     if not changed_options:
         return {
@@ -269,7 +293,7 @@ def detect_errors_node(state: DiffAgentState) -> dict[str, Any]:
             "error_summary": "No configuration changes detected."
         }
 
-    llm = get_llm("gpt-4o")  # Use more powerful model for error detection
+    llm = get_llm(provider=provider, model=powerful_model)  # Use more powerful model for error detection
 
     # Format the changed options
     options_detail = "\n\n".join([

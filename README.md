@@ -71,6 +71,13 @@ python agent.py --staged --strict
 
 # Quiet mode (suppress non-essential output)
 python agent.py --staged --quiet
+
+# Use a different LLM provider (Anthropic Claude)
+python agent.py --staged --provider anthropic
+
+# Use a specific model
+python agent.py --staged --provider openai --model gpt-4o
+python agent.py --staged --provider anthropic --model claude-sonnet-4-20250514
 ```
 
 ### Command-Line Options
@@ -84,6 +91,8 @@ python agent.py --staged --quiet
 | `--quiet`, `-q` | Suppress non-essential output |
 | `--no-color` | Disable colored output |
 | `--project-root DIR` | Root directory for dependency analysis (default: `.`) |
+| `--provider` | LLM provider: `openai` (default) or `anthropic` |
+| `--model` | Model name (e.g., `gpt-4o`, `claude-sonnet-4-20250514`) |
 | `--version` | Show version information |
 | `--help`, `-h` | Show help message |
 
@@ -308,7 +317,10 @@ python test_agent.py
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key for GPT model access |
+| `OPENAI_API_KEY` | Yes* | OpenAI API key (required when using `--provider openai`) |
+| `ANTHROPIC_API_KEY` | Yes* | Anthropic API key (required when using `--provider anthropic`) |
+
+*Only the API key for your selected provider is required.
 
 ## License
 

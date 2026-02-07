@@ -23,7 +23,7 @@ The implementation uses **LangGraph** for workflow orchestration with the follow
 The CLI is implemented in `agent.py` using `argparse`:
 
 ```
-diffagent [diff_file] [--staged] [--all] [--strict] [--quiet] [--project-root DIR]
+diffagent [diff_file] [--staged] [--all] [--strict] [--quiet] [--project-root DIR] [--provider PROVIDER] [--model MODEL]
 ```
 
 Key CLI features:
@@ -31,6 +31,8 @@ Key CLI features:
 - `--all`: Validates all uncommitted changes (staged + unstaged)
 - `--strict`: Fail on any error, not just critical ones
 - `--quiet`: Suppress non-essential output
+- `--provider`: LLM provider (`openai` or `anthropic`)
+- `--model`: Specific model name to use
 - Supports reading from file, stdin, or git staged changes
 
 Helper functions for git integration:
@@ -88,6 +90,9 @@ The `should_continue()` function provides conditional routing between nodes.
 - **commit_diff**: The git diff content to analyze
 - **commit_hash**: Optional commit identifier
 - **project_root**: Root directory for CfgNet analysis
+- **llm_provider**: LLM provider name (openai, anthropic)
+- **llm_model**: Default model name for extraction/analysis
+- **llm_powerful_model**: Powerful model name for error detection
 - **changed_options**: Extracted configuration changes (uses `add` operator for accumulation)
 - **config_dependencies**: Extracted dependencies from CfgNet
 - **needs_additional_info**: Flag for context requirements
@@ -202,8 +207,9 @@ The `test_agent.py` includes three test scenarios:
 
 ## Environment Configuration
 
-Required environment variable:
-- `OPENAI_API_KEY`: OpenAI API key for GPT model access (required)
+Required environment variables (based on selected provider):
+- `OPENAI_API_KEY`: OpenAI API key (required when using `--provider openai`)
+- `ANTHROPIC_API_KEY`: Anthropic API key (required when using `--provider anthropic`)
 
 Set via `.env` file locally or GitHub Secrets in CI/CD.
 
@@ -220,13 +226,39 @@ The CLI automatically detects these file types as configuration files:
 
 Defined in `DEFAULT_CONFIG_PATTERNS` in `agent.py`.
 
-### LLM Model Selection
+### LLM Provider and Model Configuration
 
-- **extract_options_node**: Uses `gpt-4o-mini` for cost-effective option extraction
-- **analyze_changes_node**: Uses `gpt-4o-mini` for lightweight analysis
-- **detect_errors_node**: Uses `gpt-4o` for more sophisticated error detection
+DiffAgent supports multiple LLM providers:
+
+**Supported Providers:**
+- `openai` (default): OpenAI GPT models
+- `anthropic`: Anthropic Claude models
+
+**Default Models by Provider:**
+
+| Provider | Default Model | Powerful Model (for error detection) |
+|----------|---------------|--------------------------------------|
+| openai | gpt-4o-mini | gpt-4o |
+| anthropic | claude-3-5-haiku-latest | claude-sonnet-4-20250514 |
+
+**Node Model Usage:**
+- **extract_options_node**: Uses the default model (cost-effective extraction)
+- **analyze_changes_node**: Uses the default model (lightweight analysis)
+- **detect_errors_node**: Uses the powerful model (sophisticated error detection)
 
 All models use `temperature=0` for deterministic outputs.
+
+**Configuration via CLI:**
+```bash
+# Use Anthropic Claude
+python agent.py --staged --provider anthropic
+
+# Use specific OpenAI model
+python agent.py --staged --provider openai --model gpt-4o
+
+# Use specific Anthropic model
+python agent.py --staged --provider anthropic --model claude-sonnet-4-20250514
+```
 
 ### State Management
 

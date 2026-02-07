@@ -13,6 +13,11 @@ class DiffAgentState(TypedDict):
     commit_hash: Optional[str]
     project_root: Optional[str]
 
+    # LLM Configuration
+    llm_provider: Optional[str]
+    llm_model: Optional[str]
+    llm_powerful_model: Optional[str]
+
     # Extracted information
     changed_options: Annotated[list[ChangedOption], add]
     config_dependencies: Annotated[list[ConfigDependency], add]

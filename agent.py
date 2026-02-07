@@ -35,6 +35,22 @@ DEFAULT_CONFIG_PATTERNS = [
     "*.config",
 ]
 
+# Supported LLM providers and their default models
+SUPPORTED_PROVIDERS = {
+    "openai": {
+        "default_model": "gpt-4o-mini",
+        "powerful_model": "gpt-4o",
+        "env_var": "OPENAI_API_KEY",
+    },
+    "anthropic": {
+        "default_model": "claude-3-5-haiku-latest",
+        "powerful_model": "claude-sonnet-4-20250514",
+        "env_var": "ANTHROPIC_API_KEY",
+    },
+}
+
+DEFAULT_PROVIDER = "openai"
+
 
 class DiffAgent:
     """
@@ -47,13 +63,29 @@ class DiffAgent:
     4. Generate a detailed validation report
     """
 
-    def __init__(self):
-        """Initialize the DiffAgent with a LangGraph workflow."""
+    def __init__(self, provider: str = None, model: str = None):
+        """
+        Initialize the DiffAgent with a LangGraph workflow.
+
+        Args:
+            provider: LLM provider to use ('openai' or 'anthropic'). Defaults to 'openai'.
+            model: Model name to use. If not specified, uses provider's default model.
+        """
         load_dotenv()
 
-        # Verify API key is available
-        if not os.getenv("OPENAI_API_KEY"):
-            raise ValueError("OPENAI_API_KEY not found in environment variables")
+        # Set provider and model
+        self.provider = provider or DEFAULT_PROVIDER
+        if self.provider not in SUPPORTED_PROVIDERS:
+            raise ValueError(f"Unsupported provider: {self.provider}. Supported: {list(SUPPORTED_PROVIDERS.keys())}")
+
+        provider_config = SUPPORTED_PROVIDERS[self.provider]
+        self.model = model or provider_config["default_model"]
+        self.powerful_model = provider_config["powerful_model"]
+
+        # Verify API key is available for the selected provider
+        env_var = provider_config["env_var"]
+        if not os.getenv(env_var):
+            raise ValueError(f"{env_var} not found in environment variables")
 
         # Build the graph
         self.workflow = self._build_graph()
@@ -112,6 +144,9 @@ class DiffAgent:
             "commit_diff": commit_diff,
             "commit_hash": commit_hash,
             "project_root": project_root,
+            "llm_provider": self.provider,
+            "llm_model": self.model,
+            "llm_powerful_model": self.powerful_model,
             "changed_options": [],
             "config_dependencies": [],
             "needs_additional_info": False,
@@ -366,6 +401,20 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--provider",
+        choices=list(SUPPORTED_PROVIDERS.keys()),
+        default=None,
+        help=f"LLM provider to use (default: {DEFAULT_PROVIDER}). Choices: {', '.join(SUPPORTED_PROVIDERS.keys())}."
+    )
+
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model name to use. If not specified, uses the provider's default model. "
+             "Examples: gpt-4o, gpt-4o-mini, claude-sonnet-4-20250514, claude-3-5-haiku-latest."
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 1.0.0"
@@ -424,10 +473,12 @@ def main():
 
     # Create and run the agent
     try:
-        agent = DiffAgent()
+        agent = DiffAgent(provider=args.provider, model=args.model)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
-        print("Set the OPENAI_API_KEY environment variable or add it to a .env file.", file=sys.stderr)
+        provider = args.provider or DEFAULT_PROVIDER
+        env_var = SUPPORTED_PROVIDERS.get(provider, {}).get("env_var", "API_KEY")
+        print(f"Set the {env_var} environment variable or add it to a .env file.", file=sys.stderr)
         sys.exit(2)
 
     result = agent.validate_diff(commit_diff, project_root=args.project_root)
