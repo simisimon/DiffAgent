@@ -148,9 +148,40 @@ Reusable composite action that:
 - Outputs detected errors
 - Fails if any configuration errors are found
 
+## Build System
+
+DiffAgent uses **Poetry** for dependency management and packaging.
+
+### Key Files
+- **pyproject.toml**: Poetry configuration, dependencies, and build settings
+- **requirements.txt**: Kept for backwards compatibility with pip
+
+### CLI Entry Point
+The `diffagent` command is defined in `pyproject.toml`:
+```toml
+[tool.poetry.scripts]
+diffagent = "agent:main"
+```
+
 ## Development Commands
 
-### Setup
+### Setup with Poetry (Recommended)
+
+```bash
+# Install Poetry (if not installed)
+curl -sSL https://install.python-poetry.org | python3 -
+
+# Install dependencies
+poetry install
+
+# Create .env file with your API key
+echo "OPENAI_API_KEY=your-key-here" > .env
+
+# Run DiffAgent
+poetry run diffagent --help
+```
+
+### Setup with pip
 
 ```bash
 # Create virtual environment
@@ -164,33 +195,37 @@ env\Scripts\activate  # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Create .env file with your OpenAI API key
+# Or install as editable package
+pip install -e .
+
+# Create .env file with your API key
 echo "OPENAI_API_KEY=your-key-here" > .env
 ```
 
 ### Running the Agent
 
 ```bash
-# Validate staged changes (pre-commit hook mode)
+# With Poetry
+poetry run diffagent --staged
+poetry run diffagent --all
+poetry run diffagent path/to/diff.txt
+
+# If installed as package
+diffagent --staged
+diffagent --all
+diffagent path/to/diff.txt
+
+# With Python directly
 python agent.py --staged
-
-# Validate all uncommitted changes
 python agent.py --all
-
-# Validate with strict mode
-python agent.py --staged --strict
-
-# Run with a diff file
 python agent.py path/to/diff.txt
 
-# Run with stdin (paste diff and press Ctrl+D)
-python agent.py
-
-# Run from git diff directly
+# Pipe a git diff
+git diff | diffagent
 git diff | python agent.py
 
-# Quiet mode (for scripts)
-python agent.py --staged --quiet
+# With options
+diffagent --staged --strict --provider anthropic
 ```
 
 ### Testing Locally
@@ -198,12 +233,34 @@ python agent.py --staged --quiet
 ```bash
 # Run the test suite with example diffs
 python test_agent.py
+
+# Run tests with pytest (if tests/ directory exists)
+poetry run pytest
+
+# With coverage
+poetry run pytest --cov
 ```
 
 The `test_agent.py` includes three test scenarios:
 1. **Inconsistent port configuration**: Port mismatch between Dockerfile and application.properties
 2. **Consistent change**: Simple debug flag toggle (should pass validation)
 3. **Security issue**: Wildcard in ALLOWED_HOSTS and DEBUG=true
+
+### Development Tools
+
+```bash
+# Format code with Black
+poetry run black .
+
+# Lint with Ruff
+poetry run ruff check .
+
+# Type checking with mypy
+poetry run mypy .
+
+# Run all checks
+poetry run black . && poetry run ruff check . && poetry run mypy .
+```
 
 ## Environment Configuration
 

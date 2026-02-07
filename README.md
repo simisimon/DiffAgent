@@ -27,9 +27,28 @@ DiffAgent uses LangGraph and OpenAI's GPT models to analyze git diffs and automa
 
 - Python 3.11+
 - Git
-- OpenAI API key
+- OpenAI or Anthropic API key
 
-### Setup
+### Option 1: Install with Poetry (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/DiffAgent.git
+cd DiffAgent
+
+# Install dependencies with Poetry
+poetry install
+
+# Set up your API key
+echo "OPENAI_API_KEY=your-key-here" > .env
+# Or for Anthropic:
+# echo "ANTHROPIC_API_KEY=your-key-here" > .env
+
+# Run DiffAgent
+poetry run diffagent --help
+```
+
+### Option 2: Install with pip
 
 ```bash
 # Clone the repository
@@ -45,8 +64,24 @@ env\Scripts\activate  # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Set up your OpenAI API key
+# Set up your API key
 echo "OPENAI_API_KEY=your-key-here" > .env
+
+# Run DiffAgent
+python agent.py --help
+```
+
+### Option 3: Install as Package
+
+```bash
+# Install directly from the repository
+pip install git+https://github.com/your-org/DiffAgent.git
+
+# Or install locally in development mode
+pip install -e .
+
+# Run DiffAgent
+diffagent --help
 ```
 
 ## CLI Usage
@@ -55,30 +90,32 @@ echo "OPENAI_API_KEY=your-key-here" > .env
 
 ```bash
 # Validate staged changes (for pre-commit hook)
-python agent.py --staged
+diffagent --staged
 
 # Validate all uncommitted changes (staged + unstaged)
-python agent.py --all
+diffagent --all
 
 # Validate a diff file
-python agent.py path/to/diff.txt
+diffagent path/to/diff.txt
 
 # Pipe a git diff directly
-git diff main | python agent.py
+git diff main | diffagent
 
 # Validate with strict mode (fail on any error, not just critical)
-python agent.py --staged --strict
+diffagent --staged --strict
 
 # Quiet mode (suppress non-essential output)
-python agent.py --staged --quiet
+diffagent --staged --quiet
 
 # Use a different LLM provider (Anthropic Claude)
-python agent.py --staged --provider anthropic
+diffagent --staged --provider anthropic
 
 # Use a specific model
-python agent.py --staged --provider openai --model gpt-4o
-python agent.py --staged --provider anthropic --model claude-sonnet-4-20250514
+diffagent --staged --provider openai --model gpt-4o
+diffagent --staged --provider anthropic --model claude-sonnet-4-20250514
 ```
+
+> **Note:** If not installed as a package, use `poetry run diffagent` or `python agent.py` instead of `diffagent`.
 
 ### Command-Line Options
 
@@ -200,7 +237,21 @@ Then install the hooks:
 pre-commit install
 ```
 
-### Option 3: Simple Inline Hook
+### Option 3: Simple Inline Hook (Package Installed)
+
+If DiffAgent is installed as a package:
+
+```bash
+# Create a simple pre-commit hook
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+diffagent --staged --strict
+EOF
+
+chmod +x .git/hooks/pre-commit
+```
+
+### Option 4: Simple Inline Hook (Local Development)
 
 For a quick setup in the same repository:
 
