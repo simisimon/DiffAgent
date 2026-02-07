@@ -12,7 +12,8 @@ DiffAgent is a CLI tool and GitHub Action that validates configuration file chan
 
 The implementation uses **LangGraph** for workflow orchestration with the following files:
 
-- **agent.py**: Main DiffAgent class with LangGraph workflow definition, CLI interface, and entry point
+- **agent.py**: DiffAgent class with LangGraph workflow definition and LLM provider configuration
+- **cli.py**: Command-line interface entry point with argument parsing and git integration
 - **models.py**: Pydantic data models (ChangedOption, CommitChanges, ConfigError, ValidationResult)
 - **state.py**: LangGraph state schema (DiffAgentState TypedDict)
 - **nodes.py**: Node functions for the LangGraph workflow
@@ -160,8 +161,14 @@ DiffAgent uses **Poetry** for dependency management and packaging.
 The `diffagent` command is defined in `pyproject.toml`:
 ```toml
 [tool.poetry.scripts]
-diffagent = "agent:main"
+diffagent = "cli:main"
 ```
+
+The CLI module (`cli.py`) handles:
+- Argument parsing with `argparse`
+- Git integration (`get_staged_diff`, `get_unstaged_diff`)
+- Configuration file pattern matching (`DEFAULT_CONFIG_PATTERNS`)
+- Exit code handling
 
 ## Development Commands
 

@@ -2,7 +2,7 @@
 name = "diffagent"
 version = "1.0.0"
 description = "AI-powered CLI tool that validates configuration file changes to prevent misconfigurations"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Sebastian Simon <Bastisimon95@googlemail.com>"]
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/your-org/DiffAgent"
@@ -41,7 +41,7 @@ ruff = "^0.3.0"
 mypy = "^1.8.0"
 
 [tool.poetry.scripts]
-diffagent = "agent:main"
+diffagent = "cli:main"
 
 [build-system]
 requires = ["poetry-core"]
